@@ -1,0 +1,5 @@
+<?php
+
+define('SQLITE_DB', ROOT_DIR.'/data/db.sqlite3');
+
+define('MAILGUN_API_KEY', 'FILL-ME-IN');
