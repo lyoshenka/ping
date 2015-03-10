@@ -1,0 +1,7 @@
+/vendor/
+/app/config.php
+/composer.phar
+/*.log
+/web/css/*
+.Trash-1000/
+/data/db.sqlite3
