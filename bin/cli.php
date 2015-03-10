@@ -33,16 +33,16 @@ class InitializeDatabaseCommand extends \Knp\Command\Command {
       chmod(dirname($app['pdo.db']), 0777); // sqlite needs dir to be writable
     }
 
-    $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
+    //$pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
 
-    $output->writeln('creating user table');
+    $output->writeln('creating `ping` table');
     $pdo->exec('DROP TABLE IF EXISTS ping');
     $pdo->exec("CREATE TABLE `ping` (
-        `frequency` TEXT,
+        `when` TEXT NOT NULL,
+        `created_at` DATETIME NOT NULL,
         `next_at` DATETIME,
         `name` TEXT,
-        `message` TEXT,
-        `created_at` DATETIME NOT NULL
+        `message` TEXT
       )"
     );
   }

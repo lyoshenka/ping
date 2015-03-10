@@ -158,7 +158,7 @@ function initMainRoutes($app) {
     $date = new DateTime();
     $date->add($parsed);
 
-    $app['pdo']->execute('INSERT INTO ping (frequency, next_at, name, message, created_at) VALUES (?,?,?,?,?)',[
+    $app['pdo']->execute('INSERT INTO ping (when, next_at, name, message, created_at) VALUES (?,?,?,?,?)',[
       $time, $date->format(DATE_RFC3339), trim($request->get('subject')), trim($request->get('body-plain')), date(DATE_RFC3339)
     ]);
 
