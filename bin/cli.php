@@ -51,154 +51,97 @@ class InitializeDatabaseCommand extends \Knp\Command\Command {
 
 class Lexer {
 
-  protected static $timeRelative = ['tomorrow', 'next'];
+  protected static $dayAlias = 'tomorrow';
 
-  protected static $timeConcrete = ['noon', 'midnight'];
+  protected static $timeAlias = ['noon', 'midnight'];
 
-  protected static $action = [
-    'pending', 'cancel', 'list', 'dropbox', 'drive', 'evernote'
+
+  // LONGEST TO SHORTEST
+  protected static $intervals = [
+    'minutes', 'minute', 'mi',
+    'hours', 'hour', 'hr', 'h',
+    'days', 'day', 'd',
+    'weeks', 'week', 'wk', 'w',
+    'months', 'month', 'mo', 'm',
+    'years', 'year', 'yr', 'y'
   ];
 
-  protected static $recurring = [
-    'every', 'weekdays', 'weekday', 'weekends', 'weekend', 'hourly', 'daily', 'weekly', 'monthly', 'yearly'
-  ];
-
-
-  //protected static $monthsShort; // created from $monthsLong
-  protected static $monthsLong = [
-    'january', 'february', 'march', 'april', 'may', 'june', 'july',
-    'august', 'september', 'october', 'november', 'december'
-  ];
-
-  //protected static $daysShort; // created from $daysLong
-  protected static $daysLong = [
-    'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'
-  ];
-
-  protected static $times = [
-    'T_MINUTE' => ['minute', 'minutes', 'mi'],
-    'T_HOUR' => ['hour', 'hours', 'hr', 'h'],
-    'T_DAY' => ['day', 'days', 'd'],
-    'T_WEEK' => ['week', 'weeks', 'wk', 'w'],
-    'T_MONTH' => ['month', 'months', 'mo', 'm'],
-    'T_YEAR' => ['year', 'years', 'yr', 'y']
-  ];
-
-  protected static $meridiemSuffixes = [
-    'T_AM' => ['am', 'a'],
-    'T_PM' => ['pm', 'p']
-  ];
-
-  protected static $ordinalSuffixes = [
-    'st', 'nd', 'rd', 'th'
-  ];
-
+  protected static $meridiemSuffixes = ['am', 'pm', 'a', 'p'];
 
   protected static $dateTimeSeperator = '-';
 
   protected static $recurringSuffix = '*';
 
-  protected static $terminals = [];
-
-
-
-  public function __construct()
+  public function parse($str)
   {
-    $this->initTerminals();
-  }
 
-  public function getTerminals()
-  {
-    return static::$terminals;
+    $month_long = '(?P<month_long>january|february|march|april|may|june|july|august|september|october|november|december)';
+    $month_short = '(?P<month_short>jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)';
+    $month = '(?P<month>' . $month_long . '|' . $month_short . ')';
+
+    $meridiem = '(?P<meridiem>am?|pm?)';
+    $time_military = '(?P<time_military>[012][0-9][0-6][0-9])';
+    $time_standard = '';
+    $time = '(?P<time>' . $time_standard . '|' . $time_military . ')';
+
+    $date_number = '(?P<date_number>(?:3[012]|[12]?[0-9]))';
+    $date_ordinal_suffix = '(?P<date_ordinal_suffix>st|nd|rd|th)';
+    $date = '(?P<date>' . $date_number . $date_ordinal_suffix . '?)';
+
+    $day_long = '(?P<day_long>sunday|monday|tuesday|wednesday|thursday|friday|saturday|sunday)';
+    $day_short = '(?P<day_short>sun|mon|tue|wed|thu|fri|sat|sun)';
+    $day = '(?P<day>' . $day_long . '|' . $day_short . ')';
+
+    $month_date = '(?P<month_date>' . $month . $date . ')';
+    $month_date_or_day = '(?P<month_date_or_day>' . $month_date . '|' . $day . ')';
+
+    $next = '(?P<next>next)';
+    $every = '(?P<every>every)';
+    $every_or_next = '(?P<every_or_next>' . $every . '|' . $next . ')';
+
+    $recurrence = '(?P<recurrence>hourly|daily|weekly|monthly|yearly|weekdays?|weekends?)';
+
+    $reminder = '(?P<reminder>' . $recurrence . '|(?:' . $every_or_next . '?' . $month_date_or_day . '))';
+
+    $action = '(?P<action>pending|cancel|list|dropbox|drive|evernote)';
+    $action_or_reminder = '(?P<action_or_reminder>' . $action . '|' . $reminder . ')';
+
+    $tag = '(?P<tag>\+[a-z]+)';
+    $tags = '(?P<tags>' . $tag . '*)';
+
+    $regex = '#^' . $action_or_reminder . $tags . '$#';
+
+    preg_match($regex, $str, $matches);
+
+    foreach ($matches as $k => $v)
+    {
+      if (is_int($k))
+      {
+        unset($matches[$k]);
+      }
+    }
+
+    return $matches;
   }
 
   protected function initTerminals()
   {
-    if (static::$terminals)
-    {
-      return;
-    }
+    static::$terminals['/^(' . static::$dayAlias . ')/'] = 'T_DAY_ALIAS';
+    static::$terminals['/^(' . implode('|', static::$timeAlias) . ')/'] = 'T_TIME_ALIAS';
 
-    static::$terminals['/^(\+\w+)/'] = 'T_TAG';
+    static::$terminals["/^('\d\d)/"] = 'T_YEAR_NUMBER';
 
-    // simple terminals (strings that are long and not part of any other strings)
-    foreach(array_merge(static::$timeRelative, static::$timeConcrete, static::$action, static::$recurring) as $term)
-    {
-      $regex = '/^(' . preg_quote($term) . ')/';
-      static::$terminals[$regex] = 'T_'.strtoupper($term);
-    }
+    $long = array_filter(static::$intervals, function($i) { return strlen($i) > 2; });
+    $short = array_diff(static::$intervals, $long);
 
-    // long and short version of months and days
-    foreach(array_merge(static::$monthsLong, static::$daysLong) as $term)
-    {
-      $regex = '/^(' . implode('|', array_map('preg_quote', array_unique([$term, substr($term,0,3)]))) . ')/';
-      static::$terminals[$regex] = 'T_'.strtoupper($term);
-    }
+    static::$terminals['/^(' . implode('|', $long) . ')/'] = 'T_INTERVAL_LONG';
 
-    // split time into long and short
-    $timeLong = [];
-    $timeShort = [];
+    static::$terminals['/^(\d+(' . implode('|', static::$meridiemSuffixes) . '))/'] = 'T_TIME_WITH_MERIDIEM';
 
-    foreach(static::$times as $name => $terms)
-    {
-      $long = array_filter($terms, function($t) { return strlen($t) > 2; });
-      $short = array_diff($terms, $long);
+    static::$terminals['/^(' . implode('|', $short) . ')/'] = 'T_INTERVAL_SHORT';
 
-      $timeLong[$name] = '/^(' . implode('|', array_map('preg_quote', $long)) . ')/';
-      $timeShort[$name] = '/^(' . implode('|', array_map('preg_quote', $short)) . ')/';
-    }
-
-    static::$terminals = array_merge(static::$terminals, array_flip($timeLong));
-
-    foreach(static::$meridiemSuffixes as $name => $terms)
-    {
-      $regex = '/^(' . implode('|', (array)$terms) . ')/';
-      static::$terminals[$regex] = $name;
-    }
-
-    static::$terminals['/^(' . implode('|', static::$ordinalSuffixes) . ')/'] = 'T_NTH';
-
-    static::$terminals = array_merge(static::$terminals, array_flip($timeShort));
-
-    static::$terminals['/^(\d+)/'] = 'T_NUMBER';
-  }
-
-  public function lex($string)
-  {
-    $tokens = [];
-
-    $offset = 0;
-    while($offset < strlen($string))
-    {
-      $result = $this->match($string, $offset);
-      if ($result === false)
-      {
-        throw new Exception('Unable to parse string "' . $string . '" at character ' . ($offset+1) . '.');
-      }
-      $tokens[] = $result;
-      $offset += strlen($result['match']);
-    }
-
-    return $tokens;
-  }
-
-  protected function match($line, $offset)
-  {
-    $string = substr($line, $offset);
-
-    foreach(static::$terminals as $pattern => $name)
-    {
-      if (preg_match($pattern, $string, $matches))
-      {
-        return [
-          'match' => $matches[1],
-          'token' => $name,
-          'offset' => $offset
-        ];
-      }
-    }
-
-    return false;
+    static::$terminals['/^(' . preg_quote(static::$dateTimeSeperator) . ')/'] = 'T_DATE_TIME_SEPERATOR';
+    static::$terminals['/^(' . preg_quote(static::$recurringSuffix) . ')/'] = 'T_RECURRING_SUFFIX';
   }
 }
 
@@ -216,9 +159,11 @@ class TestLexerCommand extends \Knp\Command\Command {
 
     $lexer = new Lexer();
 
+    var_export($lexer->parse('nextmarch15st+face+your'));
+
     // $output->writeln(var_export($lexer->getTerminals(), true));
 
-    $output->writeln(var_export($lexer->lex('wed4m+face+your+more'), true));
+    // $output->writeln(var_export($lexer->lex('weekdaysnextwed4\'16mar34st+face+your+more4pm'), true));
   }
 }
 
