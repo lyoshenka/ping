@@ -40,6 +40,18 @@ function initServices($app) {
   });
   $app['pdo']->execute('PRAGMA encoding = "UTF-8"');
 
+
+  /*------------------------------*\
+              PARSER
+  \*------------------------------*/
+
+  require_once APP_DIR.'/parser.php';
+
+  $app['parser'] = $app->share(function ($app) {
+    return new Parser();
+  });
+
+
   /*------------------------------*\
               MAILER
   \*------------------------------*/
